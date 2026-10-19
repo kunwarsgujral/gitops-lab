@@ -1,6 +1,6 @@
 nameOverride: ""
 fullnameOverride: ""
-replicaCount: 2 # only used when keda.enabled=false; otherwise KEDA/HPA owns replicas
+replicaCount: 1 # only used when keda.enabled=false; otherwise KEDA/HPA owns replicas
 image:
   repository: ghcr.io/kunwarsgujral/demo-app
   tag: 1ff6143 # CI overwrites this with the short git SHA on every merge to main

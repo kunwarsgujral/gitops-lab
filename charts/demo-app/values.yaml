@@ -1,22 +1,17 @@
 nameOverride: ""
 fullnameOverride: ""
-
 replicaCount: 1 # only used when keda.enabled=false; otherwise KEDA/HPA owns replicas
-
 image:
   repository: ghcr.io/kunwarsgujral/demo-app
-  tag: latest # CI overwrites this with the short git SHA on every merge to main
+  tag: 4c456fc # CI overwrites this with the short git SHA on every merge to main
   pullPolicy: IfNotPresent
-
 # Failure injection for alerting drills. Change these in Git, push, and watch the alerts fire.
 app:
   errorRate: "0" # e.g. "0.2" = 20% of requests return HTTP 500
   extraLatencyMs: "0" # e.g. "1500" = up to 1.5s extra latency per request
-
 service:
   port: 80
   targetPort: 8080
-
 # Required by the Kyverno policies in platform/kyverno-policies (require-requests-limits).
 resources:
   requests:
@@ -24,7 +19,6 @@ resources:
     memory: 64Mi
   limits:
     memory: 128Mi
-
 # Required by the require-non-root policy. The image already runs as UID 10001 (see app/Dockerfile).
 podSecurityContext:
   runAsNonRoot: true
@@ -36,7 +30,6 @@ containerSecurityContext:
   readOnlyRootFilesystem: true
   capabilities:
     drop: ["ALL"]
-
 # Secrets pulled from the secret backend by External Secrets Operator.
 externalSecret:
   enabled: true
@@ -46,11 +39,9 @@ externalSecret:
   data:
     - secretKey: API_KEY
       remoteKey: /demo/api-key
-
 serviceMonitor:
   enabled: true
   interval: 15s
-
 # Recording rules + alerts (templates/prometheusrule.yaml).
 alerts:
   enabled: true
@@ -58,11 +49,9 @@ alerts:
   errorBudget: 0.001
   latencyP95Seconds: 0.5
   runbookBaseUrl: https://github.com/kunwarsgujral/gitops-lab/blob/main/docs/runbooks/demo-app.md
-
 # Grafana dashboard shipped as a ConfigMap; the Grafana sidecar loads it (templates/grafana-dashboard.yaml).
 grafanaDashboard:
   enabled: true
-
 # Argo CD hooks (see templates/hooks.yaml).
 # Hook Jobs run in the same namespace, so they must pass the same Kyverno policies and fit the quota.
 hooks:
@@ -91,7 +80,6 @@ hooks:
   syncFailNotify:
     enabled: true
     image: curlimages/curl:8.10.1
-
 keda:
   enabled: true
   minReplicaCount: 1 # set 0 for scale-to-zero (needs an HTTP add-on or a different trigger to wake up)

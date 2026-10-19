@@ -52,7 +52,10 @@ jobs:
 
       - name: Policy check against the rendered chart
         run: |
-          helm template demo-app charts/demo-app > /tmp/rendered.yaml
+          # Check the tag this run will actually deploy (build-and-release sets image.tag to the short SHA).
+          # Rendering the committed tag would fail disallow-latest-tag before the first build ever happens:
+          # kyverno apply exits 1 on Audit failures of CEL ValidatingPolicies, even with --audit-warn.
+          helm template demo-app charts/demo-app --set image.tag="${GITHUB_SHA::7}" > /tmp/rendered.yaml
           # The chart doesn't set metadata.namespace (Argo CD supplies it), but the policies skip
           # platform namespaces by name, so stamp the real target namespace before checking.
           yq -i '.metadata.namespace = "demo"' /tmp/rendered.yaml

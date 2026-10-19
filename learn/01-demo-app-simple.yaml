@@ -1,0 +1,36 @@
+# Learning step: the smallest useful Argo CD Application.
+# Deploys charts/demo-app from Git with every add-on that needs another operator switched off,
+# so it works on a cluster that has nothing but Argo CD. No syncPolicy: you press Sync yourself.
+# Later, apps/60-demo-app.yaml (same name) replaces this with the full version.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kunwarsgujral/gitops-lab.git
+    targetRevision: main
+    path: charts/demo-app
+    helm:
+      valueFiles:
+        - values.yaml
+      # Overrides on top of values.yaml. Each one needs a CRD this cluster doesn't have yet.
+      valuesObject:
+        keda:
+          enabled: false # ScaledObject (KEDA)
+        serviceMonitor:
+          enabled: false # ServiceMonitor (Prometheus Operator)
+        alerts:
+          enabled: false # PrometheusRule (Prometheus Operator)
+        externalSecret:
+          enabled: false # ExternalSecret (ESO)
+        grafanaDashboard:
+          enabled: false # only useful once Grafana exists
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

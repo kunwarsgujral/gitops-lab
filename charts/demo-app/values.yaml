@@ -3,7 +3,7 @@ fullnameOverride: ""
 replicaCount: 2 # only used when keda.enabled=false; otherwise KEDA/HPA owns replicas
 image:
   repository: ghcr.io/kunwarsgujral/demo-app
-  tag: 4c456fc # CI overwrites this with the short git SHA on every merge to main
+  tag: 1ff6143 # CI overwrites this with the short git SHA on every merge to main
   pullPolicy: IfNotPresent
 # Failure injection for alerting drills. Change these in Git, push, and watch the alerts fire.
 app:

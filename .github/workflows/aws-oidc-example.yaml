@@ -5,7 +5,7 @@
 # One-time AWS setup:
 #   1. IAM identity provider: https://token.actions.githubusercontent.com, audience sts.amazonaws.com
 #   2. IAM role whose trust policy restricts the "sub" claim, e.g.
-#        "token.actions.githubusercontent.com:sub": "repo:YOUR_GITHUB_USER/gitops-lab:ref:refs/heads/main"
+#        "token.actions.githubusercontent.com:sub": "repo:kunwarsgujral/gitops-lab:ref:refs/heads/main"
 #   3. Put the role ARN in the workflow below.
 name: aws-oidc-example
 

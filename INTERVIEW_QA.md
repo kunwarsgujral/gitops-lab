@@ -209,7 +209,7 @@ spec:
         operations: ["CREATE"]
         resources: ["pods"]
   matchImageReferences:
-    - glob: "ghcr.io/YOUR_GITHUB_USER/*"
+    - glob: "ghcr.io/kunwarsgujral/*"
   validationConfigurations:
     mutateDigest: true # rewrite the tag to the verified digest
   attestors:
@@ -218,7 +218,7 @@ spec:
         keyless:
           identities:
             - issuer: https://token.actions.githubusercontent.com
-              subject: https://github.com/YOUR_GITHUB_USER/gitops-lab/.github/workflows/ci.yaml@refs/heads/main
+              subject: https://github.com/kunwarsgujral/gitops-lab/.github/workflows/ci.yaml@refs/heads/main
         ctlog:
           url: https://rekor.sigstore.dev
   validations:

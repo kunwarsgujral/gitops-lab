@@ -1,5 +1,5 @@
 # App-of-apps root. Apply this ONCE by hand; Argo CD manages everything else from Git.
-# scripts/bootstrap.sh replaces YOUR_GITHUB_USER with your real repo owner.
+# scripts/bootstrap.sh replaces kunwarsgujral with your real repo owner.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/YOUR_GITHUB_USER/gitops-lab.git
+    repoURL: https://github.com/kunwarsgujral/gitops-lab.git
     targetRevision: main
     path: apps
     directory:

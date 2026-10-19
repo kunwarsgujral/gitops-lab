@@ -12,7 +12,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/YOUR_GITHUB_USER/gitops-lab.git
+    repoURL: https://github.com/kunwarsgujral/gitops-lab.git
     targetRevision: main
     path: platform/eso-config
   destination:

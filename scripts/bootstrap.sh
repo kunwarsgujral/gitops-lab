@@ -8,7 +8,7 @@ GH_USER="${1:?usage: $0 <github-user>}"
 cd "$(dirname "$0")/.."
 
 echo ">> Pointing manifests at github.com/${GH_USER}/gitops-lab"
-grep -rl YOUR_GITHUB_USER apps bootstrap charts | xargs sed -i "s/YOUR_GITHUB_USER/${GH_USER}/g"
+grep -rl kunwarsgujral apps bootstrap charts | xargs sed -i "s/kunwarsgujral/${GH_USER}/g"
 echo "   Commit and push these changes before continuing (Argo CD reads from Git, not your disk)."
 read -r -p "   Pushed? [y/N] " ok
 [[ "${ok}" == "y" ]] || exit 1

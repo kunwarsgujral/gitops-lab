@@ -4,7 +4,7 @@ fullnameOverride: ""
 replicaCount: 1 # only used when keda.enabled=false; otherwise KEDA/HPA owns replicas
 
 image:
-  repository: ghcr.io/YOUR_GITHUB_USER/demo-app
+  repository: ghcr.io/kunwarsgujral/demo-app
   tag: latest # CI overwrites this with the short git SHA on every merge to main
   pullPolicy: IfNotPresent
 
@@ -57,7 +57,7 @@ alerts:
   # Availability SLO 99.9% => error budget 0.1%. Burn-rate alerts are multiples of this.
   errorBudget: 0.001
   latencyP95Seconds: 0.5
-  runbookBaseUrl: https://github.com/YOUR_GITHUB_USER/gitops-lab/blob/main/docs/runbooks/demo-app.md
+  runbookBaseUrl: https://github.com/kunwarsgujral/gitops-lab/blob/main/docs/runbooks/demo-app.md
 
 # Grafana dashboard shipped as a ConfigMap; the Grafana sidecar loads it (templates/grafana-dashboard.yaml).
 grafanaDashboard:

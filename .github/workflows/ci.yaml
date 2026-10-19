@@ -1,0 +1,109 @@
+# CI only. This workflow never touches the cluster.
+#   PR:   lint + render + schema-validate the Helm chart.
+#   main: same checks, then build/push the image and commit the new tag to values.yaml.
+#         Argo CD sees that Git change and deploys it (pull-based CD).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Helm lint
+        run: helm lint charts/demo-app
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | tar xz -C /usr/local/bin kubeconform
+
+      - name: Render chart and validate against K8s schemas
+        run: |
+          helm template demo-app charts/demo-app \
+            | kubeconform -strict -summary -ignore-missing-schemas \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+
+      # Shift left: run the same Kyverno policies the cluster enforces, so a violation fails the PR
+      # instead of failing the Argo CD sync later.
+      - name: Install Kyverno CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo kyverno/kyverno --pattern 'kyverno-cli_*_linux_x86_64.tar.gz' --output /tmp/kyverno.tgz
+          tar -xzf /tmp/kyverno.tgz -C /tmp kyverno
+          sudo mv /tmp/kyverno /usr/local/bin/kyverno
+          kyverno version
+
+      - name: Policy check against the rendered chart
+        run: |
+          helm template demo-app charts/demo-app > /tmp/rendered.yaml
+          # The chart doesn't set metadata.namespace (Argo CD supplies it), but the policies skip
+          # platform namespaces by name, so stamp the real target namespace before checking.
+          yq -i '.metadata.namespace = "demo"' /tmp/rendered.yaml
+          # Deny policies fail the build; Audit policies (disallow-latest-tag) only warn.
+          kyverno apply platform/kyverno-policies/policies/ --resource /tmp/rendered.yaml --audit-warn
+
+      - name: Policy unit tests
+        run: kyverno test tests/kyverno/
+
+  build-and-release:
+    needs: validate
+    # Skip on PRs and on the bot's own tag-bump commit (belt and braces: GITHUB_TOKEN pushes
+    # do not trigger workflows anyway).
+    if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag bump
+      packages: write # push to GHCR
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image name and tag
+        id: meta
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${owner}/demo-app" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: app
+          push: true
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Bump image tag in values.yaml (this commit is the deployment)
+        run: |
+          yq -i '.image.tag = "${{ steps.meta.outputs.tag }}"' charts/demo-app/values.yaml
+          yq -i '.image.repository = "${{ steps.meta.outputs.image }}"' charts/demo-app/values.yaml
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/demo-app/values.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "ci: deploy demo-app ${{ steps.meta.outputs.tag }} [skip ci]"
+          git push

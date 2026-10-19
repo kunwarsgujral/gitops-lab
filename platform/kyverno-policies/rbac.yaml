@@ -1,0 +1,33 @@
+# Kyverno's controllers get extra permissions through aggregated ClusterRoles: any ClusterRole with the
+# matching label is merged into the controller's own role. Grant only what the policies need.
+#
+# Background controller: creates and keeps in sync the ResourceQuota and LimitRange that the
+# namespace-guardrails GeneratingPolicy generates. Kyverno rejects a generating policy if this
+# permission is missing.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:gitops-lab:namespace-guardrails
+  labels:
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Reports controller: background scans need to read every kind a policy matches. Core kinds are
+# covered by the built-in view role; ESO's ExternalSecret is a CRD, so grant it explicitly.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:gitops-lab:read-externalsecrets
+  labels:
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets"]
+    verbs: ["get", "list", "watch"]

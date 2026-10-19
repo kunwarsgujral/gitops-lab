@@ -1,0 +1,26 @@
+# Wave 0: Stakater Reloader. Restarts Deployments when a referenced Secret/ConfigMap changes,
+# which closes the loop on ESO secret rotation (ESO updates the Secret, Reloader rolls the pods).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reloader
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://stakater.github.io/stakater-charts
+    chart: reloader
+    targetRevision: "*" # PIN THIS: run scripts/pin-versions.sh, then set an exact version
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: reloader
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

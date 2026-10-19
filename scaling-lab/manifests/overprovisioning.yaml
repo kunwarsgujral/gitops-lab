@@ -1,0 +1,48 @@
+# Overprovisioning: keep spare capacity warm so real pods never wait for a node to boot.
+#
+# How it works:
+#  1. These "placeholder" pods have a NEGATIVE priority, lower than every normal pod (default 0).
+#  2. When a real pod can't fit, the scheduler preempts (evicts) a placeholder and the real pod
+#     starts immediately in the space it freed.
+#  3. The evicted placeholder goes Pending, which triggers the cluster autoscaler to add a node in
+#     the background, restoring the buffer.
+# The cost: you pay for the idle buffer. The size of the buffer is a business decision (cost vs latency).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: overprovisioning
+value: -10
+globalDefault: false
+preemptionPolicy: Never # placeholders must never preempt anything themselves
+description: "Placeholder pods that reserve spare capacity; evicted first."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overprovisioning
+  namespace: autoscale-test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: overprovisioning
+  template:
+    metadata:
+      labels:
+        app: overprovisioning
+    spec:
+      priorityClassName: overprovisioning
+      nodeSelector:
+        kwok-nodegroup: small
+      tolerations:
+        - key: kwok-provider
+          operator: Exists
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi

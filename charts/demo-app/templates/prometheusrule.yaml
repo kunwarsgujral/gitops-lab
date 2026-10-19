@@ -1,0 +1,105 @@
+{{- if .Values.alerts.enabled }}
+{{- $job := include "demo-app.fullname" . }}
+{{- $ns := .Release.Namespace }}
+{{- $sel := printf "job=\"%s\", namespace=\"%s\"" $job $ns }}
+{{- $eb := .Values.alerts.errorBudget }}
+{{- $runbook := .Values.alerts.runbookBaseUrl }}
+# Prometheus picks this up because apps/30-monitoring.yaml sets ruleSelectorNilUsesHelmValues: false.
+# (By default kube-prometheus-stack only loads rules labelled release=<its release name>.)
+# Prometheus's own template placeholders (value, labels) are wrapped in backtick raw strings
+# in the annotations below, so Helm passes them through untouched.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $job }}
+  labels:
+    {{- include "demo-app.labels" . | nindent 4 }}
+spec:
+  groups:
+    # Recording rules: precompute the expensive expressions once, reuse them in alerts and dashboards.
+    # Naming convention: level:metric:operations.
+    - name: {{ $job }}.recording
+      rules:
+        - record: namespace_job:demo_app_http_requests:rate5m
+          expr: sum by (namespace, job) (rate(demo_app_http_requests_total{ {{- $sel -}} }[5m]))
+        {{- range $w := list "5m" "30m" "1h" "6h" }}
+        - record: namespace_job:demo_app_http_errors:ratio_rate{{ $w }}
+          expr: |
+            sum by (namespace, job) (rate(demo_app_http_requests_total{ {{- $sel -}}, code=~"5.."}[{{ $w }}]))
+            /
+            sum by (namespace, job) (rate(demo_app_http_requests_total{ {{- $sel -}} }[{{ $w }}]))
+        {{- end }}
+        - record: namespace_job:demo_app_http_request_duration_seconds:p95_5m
+          expr: histogram_quantile(0.95, sum by (namespace, job, le) (rate(demo_app_http_request_duration_seconds_bucket{ {{- $sel -}} }[5m])))
+
+    - name: {{ $job }}.alerts
+      rules:
+        # Multi-window, multi-burn-rate SLO alerts (Google SRE workbook).
+        # Fast burn: 14.4x budget burn = 2% of a 30-day budget gone in 1 hour. Page.
+        - alert: DemoAppErrorBudgetBurnFast
+          expr: |
+            namespace_job:demo_app_http_errors:ratio_rate1h{ {{- $sel -}} } > (14.4 * {{ $eb }})
+            and
+            namespace_job:demo_app_http_errors:ratio_rate5m{ {{- $sel -}} } > (14.4 * {{ $eb }})
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $job }} is burning its error budget fast"
+            description: {{`"Error ratio over 1h is {{ $value | humanizePercentage }}. At this rate the 30-day error budget is gone in about 2 days."`}}
+            runbook_url: "{{ $runbook }}#demoapperrorbudgetburnfast"
+
+        # Slow burn: 6x budget burn = 5% of the budget gone in 6 hours. Ticket, not page.
+        - alert: DemoAppErrorBudgetBurnSlow
+          expr: |
+            namespace_job:demo_app_http_errors:ratio_rate6h{ {{- $sel -}} } > (6 * {{ $eb }})
+            and
+            namespace_job:demo_app_http_errors:ratio_rate30m{ {{- $sel -}} } > (6 * {{ $eb }})
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $job }} is steadily burning its error budget"
+            description: {{`"Error ratio over 6h is {{ $value | humanizePercentage }}."`}}
+            runbook_url: "{{ $runbook }}#demoapperrorbudgetburnslow"
+
+        - alert: DemoAppHighLatencyP95
+          expr: namespace_job:demo_app_http_request_duration_seconds:p95_5m{ {{- $sel -}} } > {{ .Values.alerts.latencyP95Seconds }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $job }} p95 latency above {{ .Values.alerts.latencyP95Seconds }}s"
+            description: {{`"p95 latency is {{ $value | humanizeDuration }}."`}}
+            runbook_url: "{{ $runbook }}#demoapphighlatencyp95"
+
+        # No healthy scrape targets, or the series vanished entirely (absent catches "no pods at all").
+        - alert: DemoAppTargetDown
+          expr: |
+            sum(up{ {{- $sel -}} }) == 0
+            or
+            absent(up{ {{- $sel -}} })
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Prometheus cannot scrape any {{ $job }} pod"
+            description: "No demo-app target has been up for 2 minutes."
+            runbook_url: "{{ $runbook }}#demoapptargetdown"
+
+        {{- if .Values.keda.enabled }}
+        # Capacity: KEDA's HPA has been pinned at maxReplicaCount, so it cannot absorb more load.
+        - alert: DemoAppAtMaxReplicas
+          expr: |
+            max by (namespace, horizontalpodautoscaler) (kube_horizontalpodautoscaler_status_current_replicas{namespace="{{ $ns }}", horizontalpodautoscaler="keda-hpa-{{ $job }}"})
+            >=
+            max by (namespace, horizontalpodautoscaler) (kube_horizontalpodautoscaler_spec_max_replicas{namespace="{{ $ns }}", horizontalpodautoscaler="keda-hpa-{{ $job }}"})
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $job }} has been at max replicas for 15 minutes"
+            description: "Autoscaling is capped at {{ .Values.keda.maxReplicaCount }}; raise the cap or find out why load grew."
+            runbook_url: "{{ $runbook }}#demoappatmaxreplicas"
+        {{- end }}
+{{- end }}

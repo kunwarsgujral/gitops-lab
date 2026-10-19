@@ -1,0 +1,41 @@
+# Wave 1: the demo app (your own Helm chart). Depends on ESO store, Prometheus CRDs, KEDA CRDs.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USER/gitops-lab.git
+    targetRevision: main
+    path: charts/demo-app
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    # KEDA owns replica count via the HPA it creates; Argo must not fight it.
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

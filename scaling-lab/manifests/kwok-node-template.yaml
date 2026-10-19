@@ -1,0 +1,42 @@
+# Node template for the cluster autoscaler's kwok provider: the "instance type" of the fake node group.
+# The cluster-autoscaler chart creates a ConfigMap with this name full of sample nodes; up.sh replaces
+# its contents with this single, small template (a `helm upgrade` would restore the samples, so
+# re-apply this file after any upgrade of the autoscaler release).
+#
+# Node group = every template node with the same `kwok-nodegroup` label value (the chart's
+# kwok-provider-config groups by that label). Size limits come from the annotations below.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kwok-provider-templates
+  namespace: kube-system
+data:
+  templates: |
+    apiVersion: v1
+    kind: Node
+    metadata:
+      name: small
+      annotations:
+        cluster-autoscaler.kwok.nodegroup/min-count: "0"
+        cluster-autoscaler.kwok.nodegroup/max-count: "5" # always cap node groups (cost safety net)
+      labels:
+        kwok-nodegroup: small
+        node.kubernetes.io/instance-type: lab.small
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+        topology.kubernetes.io/zone: zone-fake
+    spec: {}
+    status:
+      allocatable:
+        cpu: "4"
+        memory: 8Gi
+        pods: "110"
+      capacity:
+        cpu: "4"
+        memory: 8Gi
+        pods: "110"
+      conditions:
+        - type: Ready
+          status: "True"
+          reason: KubeletReady
+          message: kwok fake node

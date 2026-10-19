@@ -1,0 +1,6 @@
+apiVersion: v2
+name: demo-app
+description: Tiny HTTP app exposing Prometheus metrics, autoscaled by KEDA, with secrets from ESO
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

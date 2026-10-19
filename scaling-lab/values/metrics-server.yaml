@@ -1,0 +1,5 @@
+# metrics-server feeds the HPA (and `kubectl top`) with live CPU/memory from each kubelet.
+# kind's kubelets use self-signed serving certificates, so skip verification. Lab only:
+# in a real cluster you'd have properly signed kubelet serving certs instead.
+args:
+  - --kubelet-insecure-tls

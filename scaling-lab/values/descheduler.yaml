@@ -1,0 +1,51 @@
+# Descheduler (registry.k8s.io/descheduler). Starts in DRY-RUN: it only logs what it would evict.
+# README step 7 switches dry-run off once you've read the logs.
+
+# Run as a long-lived Deployment that re-evaluates every minute (the chart default is a CronJob
+# every 2 minutes). Faster feedback for a lab; production usually runs less often.
+kind: Deployment
+deschedulingInterval: 1m
+
+cmdOptions:
+  v: 3
+  dry-run: true
+
+deschedulerPolicy:
+  profiles:
+    - name: lab
+      pluginConfig:
+        - name: DefaultEvictor
+          args:
+            # Respect PodDisruptionBudgets is always on. Also allow evicting pods with emptyDir
+            # volumes, because the Bitnami NGINX pods use emptyDir for temp files and would
+            # otherwise be protected from eviction.
+            podProtections:
+              defaultDisabled:
+                - "PodsWithLocalStorage"
+        - name: RemoveDuplicates
+        - name: RemovePodsViolatingTopologySpreadConstraint
+          args:
+            # By default only hard (DoNotSchedule) constraints are enforced. Our NGINX constraints
+            # are soft (ScheduleAnyway), so include them.
+            constraints:
+              - DoNotSchedule
+              - ScheduleAnyway
+        - name: LowNodeUtilization
+          args:
+            # Nodes below all "thresholds" are underused; pods are evicted from nodes above any
+            # "targetThresholds" so the scheduler can place them on the underused ones.
+            # Percentages are of each node's allocatable resources, computed from requests.
+            thresholds:
+              cpu: 20
+              memory: 20
+              pods: 20
+            targetThresholds:
+              cpu: 50
+              memory: 50
+              pods: 50
+      plugins:
+        balance:
+          enabled:
+            - RemoveDuplicates
+            - RemovePodsViolatingTopologySpreadConstraint
+            - LowNodeUtilization

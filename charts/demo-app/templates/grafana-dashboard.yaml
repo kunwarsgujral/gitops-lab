@@ -1,0 +1,17 @@
+{{- if .Values.grafanaDashboard.enabled }}
+# The Grafana sidecar (configured in apps/30-monitoring.yaml) watches every namespace for
+# ConfigMaps labelled grafana_dashboard: "1" and loads them. Dashboards live in Git like everything else.
+# The JSON is read with .Files.Get, so it is NOT templated: Grafana's legend placeholders stay intact.
+# (Careful: Helm parses braces even inside YAML comments, so never write Grafana/Prometheus
+# placeholder syntax literally in a template comment.)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "demo-app.fullname" . }}-dashboard
+  labels:
+    {{- include "demo-app.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  demo-app.json: |-
+{{ .Files.Get "dashboards/demo-app.json" | indent 4 }}
+{{- end }}

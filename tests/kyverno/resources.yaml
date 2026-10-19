@@ -1,0 +1,204 @@
+# Sample resources for kyverno test. Namespace team-a is a tenant namespace (not in the platform skip list).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-pod
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: busybox:1.36
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-no-limits
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: busybox:1.36
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-runs-as-root
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: busybox:1.36
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-latest-tag
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: nginx:latest
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-untagged
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: nginx
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-registry-port-no-tag
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: registry.local:5000/app
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-registry-port-tagged
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: registry.local:5000/app:1.4.2
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-digest
+  namespace: team-a
+spec:
+  containers:
+  - name: c
+    image: nginx@sha256:0d17b565c37bcbd895e9d92315a05c1c3c9a29f762b011a10c54a66cd53c9b31
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: es-cluster-store
+  namespace: team-a
+spec:
+  secretStoreRef:
+    name: some-store
+    kind: ClusterSecretStore
+  target:
+    name: es-cluster-store
+  data:
+  - secretKey: k
+    remoteRef:
+      key: /k
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: es-namespaced-store
+  namespace: team-a
+spec:
+  secretStoreRef:
+    name: some-store
+    kind: SecretStore
+  target:
+    name: es-namespaced-store
+  data:
+  - secretKey: k
+    remoteRef:
+      key: /k
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: es-default-kind
+  namespace: team-a
+spec:
+  secretStoreRef:
+    name: some-store
+  target:
+    name: es-default-kind
+  data:
+  - secretKey: k
+    remoteRef:
+      key: /k

@@ -1,0 +1,62 @@
+# Wave 0: Prometheus + Alertmanager + Grafana (kube-prometheus-stack).
+# Grafana's admin password comes from the K8s Secret "grafana-admin", created by ESO.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: "*" # PIN THIS: run scripts/pin-versions.sh, then set an exact version
+    helm:
+      # releaseName defaults to the Application name, so the Prometheus Service is
+      # kube-prometheus-stack-prometheus (KEDA's serverAddress depends on that).
+      valuesObject:
+        grafana:
+          admin:
+            existingSecret: grafana-admin
+            userKey: admin-user
+            passwordKey: admin-password
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              searchNamespace: ALL # load dashboard ConfigMaps from app namespaces, not just monitoring
+        prometheus:
+          prometheusSpec:
+            # Lab shortcut: by default the stack only selects ServiceMonitors/PodMonitors/PrometheusRules
+            # labelled release=kube-prometheus-stack. These flags make it select them all, in every namespace.
+            # In production you would keep a selector (e.g. a team label) instead.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+            retention: 6h
+        # kind/minikube don't expose these control-plane endpoints; avoids permanent red targets.
+        kubeControllerManager:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeEtcd:
+          enabled: false
+        kubeProxy:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The CRDs are too large for client-side apply (annotation size limit).
+      - ServerSideApply=true

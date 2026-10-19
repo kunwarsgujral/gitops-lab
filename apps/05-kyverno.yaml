@@ -1,0 +1,40 @@
+# Wave -3: Kyverno, before everything else, so policies are in force before the workloads they guard exist.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://kyverno.github.io/kyverno/
+    chart: kyverno
+    targetRevision: "*" # PIN THIS: run scripts/pin-versions.sh. The policies in this repo need Kyverno 1.17+ (CEL policy types at v1).
+    helm:
+      valuesObject:
+        admissionController:
+          replicas: 1 # lab only. Production: 3+, with a PodDisruptionBudget, because Kyverno sits in the API server's write path.
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Kyverno's CRDs exceed the client-side apply annotation limit (same reason as kube-prometheus-stack).
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    # Kyverno's controllers use aggregated ClusterRoles: Kubernetes fills in .rules at runtime from
+    # every ClusterRole carrying the aggregation label (including platform/kyverno-policies/rbac.yaml).
+    # Without this, Argo CD sees the filled-in rules as drift. Kyverno's chart README recommends it.
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      jsonPointers:
+        - /rules

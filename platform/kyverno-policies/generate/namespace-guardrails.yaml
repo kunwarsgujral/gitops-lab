@@ -1,0 +1,63 @@
+# Kyverno CEL policy type (policies.kyverno.io/v1, Kyverno 1.17+). The older kyverno.io ClusterPolicy
+# kind is deprecated since Kyverno 1.19, and 1.20 blocks creating new ones, so this lab uses the CEL types.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: namespace-guardrails
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    policies.kyverno.io/title: Give every tenant namespace a quota and limit range
+    policies.kyverno.io/description: >-
+      The Kubernetes version of giving each customer dedicated capacity: every new tenant namespace
+      gets a ResourceQuota and a LimitRange automatically, and synchronize puts them back if deleted.
+spec:
+  evaluation:
+    generateExisting:
+      enabled: true # also cover namespaces that existed before the policy
+    synchronize:
+      enabled: true # recreate or revert the generated resources if someone deletes or edits them
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: skip-platform-namespaces
+      expression: "!(object.metadata.name in ['kube-system', 'kube-public', 'kube-node-lease', 'local-path-storage', 'kyverno', 'argocd', 'external-secrets', 'monitoring', 'keda', 'reloader'])"
+  # Note: the built-in LimitRanger admission plugin runs before Kyverno's webhooks, so a bare Pod
+  # created here gets these memory defaults before require-requests-limits sees it. Deployments are
+  # not defaulted (only Pods are), so the Deployment-level autogen check still catches missing limits.
+  variables:
+    - name: quota
+      expression: >-
+        {
+          "apiVersion": dyn("v1"),
+          "kind": dyn("ResourceQuota"),
+          "metadata": dyn({"name": dyn("tenant-quota")}),
+          "spec": dyn({
+            "hard": dyn({
+              "requests.cpu": dyn("4"),
+              "requests.memory": dyn("4Gi"),
+              "limits.memory": dyn("6Gi"),
+              "pods": dyn("30")
+            })
+          })
+        }
+    - name: limitRange
+      expression: >-
+        {
+          "apiVersion": dyn("v1"),
+          "kind": dyn("LimitRange"),
+          "metadata": dyn({"name": dyn("tenant-limits")}),
+          "spec": dyn({
+            "limits": dyn([{
+              "type": dyn("Container"),
+              "max": dyn({"memory": dyn("2Gi")}),
+              "default": dyn({"memory": dyn("256Mi")}),
+              "defaultRequest": dyn({"memory": dyn("128Mi")})
+            }])
+          })
+        }
+  generate:
+    - expression: generator.apply(object.metadata.name, [variables.quota, variables.limitRange])

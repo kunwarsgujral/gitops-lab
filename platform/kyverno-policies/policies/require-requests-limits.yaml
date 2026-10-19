@@ -1,0 +1,34 @@
+# Kyverno CEL policy type (policies.kyverno.io/v1, Kyverno 1.17+). The older kyverno.io ClusterPolicy
+# kind is deprecated since Kyverno 1.19, and 1.20 blocks creating new ones, so this lab uses the CEL types.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: require-requests-limits
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    policies.kyverno.io/title: Require requests and memory limits
+    policies.kyverno.io/description: >-
+      Without requests the scheduler can't place pods sensibly and the namespace quota can't be
+      enforced; without a memory limit one pod can starve its node.
+spec:
+  validationActions: [Deny]
+  matchConstraints:
+    # Matching only Pods lets Kyverno auto-generate the same check for Deployments, StatefulSets,
+    # DaemonSets, Jobs and CronJobs (object.spec is rewritten to the pod template). So a bad
+    # Deployment is rejected at apply time, not later when its ReplicaSet tries to create pods.
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    # Secure by default: every namespace is a tenant namespace except the platform ones listed here.
+    - name: skip-platform-namespaces
+      expression: "!(request.namespace in ['kube-system', 'kube-public', 'kube-node-lease', 'local-path-storage', 'kyverno', 'argocd', 'external-secrets', 'monitoring', 'keda', 'reloader'])"
+  validations:
+    - expression: >-
+        object.spec.containers.all(c,
+          has(c.resources) &&
+          has(c.resources.requests) && 'cpu' in c.resources.requests && 'memory' in c.resources.requests &&
+          has(c.resources.limits) && 'memory' in c.resources.limits)
+      message: "Every container needs resources.requests.cpu, resources.requests.memory and resources.limits.memory."

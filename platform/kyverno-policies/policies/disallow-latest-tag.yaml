@@ -1,0 +1,37 @@
+# Kyverno CEL policy type (policies.kyverno.io/v1, Kyverno 1.17+). The older kyverno.io ClusterPolicy
+# kind is deprecated since Kyverno 1.19, and 1.20 blocks creating new ones, so this lab uses the CEL types.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    policies.kyverno.io/title: Disallow untagged and latest images
+    policies.kyverno.io/description: >-
+      Audit, not Deny, on purpose: the chart's image tag is "latest" until the first CI run commits a
+      real tag, so this shows up in PolicyReports instead of blocking the first sync. Switch to Deny
+      once nothing violates it.
+spec:
+  validationActions: [Audit]
+  matchConstraints:
+    # Matching only Pods lets Kyverno auto-generate the same check for Deployments, StatefulSets,
+    # DaemonSets, Jobs and CronJobs (object.spec is rewritten to the pod template). So a bad
+    # Deployment is rejected at apply time, not later when its ReplicaSet tries to create pods.
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchConditions:
+    # Secure by default: every namespace is a tenant namespace except the platform ones listed here.
+    - name: skip-platform-namespaces
+      expression: "!(request.namespace in ['kube-system', 'kube-public', 'kube-node-lease', 'local-path-storage', 'kyverno', 'argocd', 'external-secrets', 'monitoring', 'keda', 'reloader'])"
+  validations:
+    # Pass if pinned by digest, or if the part after the last slash has a tag that isn't "latest".
+    # An image with no tag at all (nginx) means latest, so it must fail too; and a registry port
+    # (myregistry:5000/app) is not a tag, which is why the tag part may not contain a slash.
+    - expression: >-
+        object.spec.containers.all(c,
+          c.image.contains('@') ||
+          (c.image.matches('^.+:[^/:]+$') && !c.image.endsWith(':latest')))
+      message: "Pin every image to a version tag or digest; untagged and ':latest' images are not allowed."

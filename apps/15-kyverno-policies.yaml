@@ -1,0 +1,40 @@
+# Wave -1: the policies. After Kyverno (-3) and ESO (-2) are Healthy, because one policy matches
+# ESO's ExternalSecret CRD. Same wave as eso-config, which creates the demo namespace; the
+# GeneratingPolicy uses generateExisting, so it covers namespaces created before or after it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    # Diff against a server-side dry run, so fields Kyverno defaults on policies at admission
+    # don't show up as permanent OutOfSync.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USER/gitops-lab.git
+    targetRevision: main
+    path: platform/kyverno-policies
+    directory:
+      recurse: true # rbac.yaml at the top, validating policies in policies/, the generating policy in generate/
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      # RBAC aggregation is asynchronous: the first attempt to create the GeneratingPolicy can be
+      # rejected before the background controller's permissions have been aggregated. A retry fixes it.
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m

@@ -1,0 +1,33 @@
+# Local multi-node cluster for the scaling lab. Works on Docker Desktop (Mac/Windows), OrbStack, Colima or Linux.
+#
+# Why 3 workers with zone labels: so topology spread, PDBs and node drains behave like a real
+# multi-zone cluster. Real clouds put the zone label on nodes automatically; here we add it by hand.
+#
+# Why the port mapping: there is no cloud load balancer on a laptop. The NGINX Service is a NodePort
+# on 30080, and this maps the control-plane container's port 30080 to your machine, so
+# http://localhost:30080 reaches the Service. kube-proxy on that node forwards to pods on any worker.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: scaling
+nodes:
+  - role: control-plane
+    # Pinned to Kubernetes 1.36 to match cluster-autoscaler v1.36.x (the autoscaler's minor version
+    # should match the cluster's). Image and digest from the kind v0.33.0 release notes; amd64 + arm64.
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        listenAddress: "127.0.0.1" # only reachable from your machine, not your network
+        protocol: TCP
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    labels:
+      topology.kubernetes.io/zone: zone-a
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    labels:
+      topology.kubernetes.io/zone: zone-b
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    labels:
+      topology.kubernetes.io/zone: zone-c

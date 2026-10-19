@@ -1,0 +1,27 @@
+# Wave -1: namespaces + ClusterSecretStore + ExternalSecret for Grafana admin.
+# Runs after the ESO operator is Healthy, before Prometheus/Grafana start.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: eso-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USER/gitops-lab.git
+    targetRevision: main
+    path: platform/eso-config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-secrets
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # If the CRDs are not registered yet on the first dry run, don't fail the sync.
+      - SkipDryRunOnMissingResource=true

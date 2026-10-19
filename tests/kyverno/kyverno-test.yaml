@@ -1,0 +1,68 @@
+# Unit tests for the policies: run with `kyverno test tests/kyverno/`. Schema: cli.kyverno.io/v1alpha1 Test.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: gitops-lab-policies
+policies:
+- ../../platform/kyverno-policies/policies/require-requests-limits.yaml
+- ../../platform/kyverno-policies/policies/require-non-root.yaml
+- ../../platform/kyverno-policies/policies/disallow-latest-tag.yaml
+- ../../platform/kyverno-policies/policies/restrict-clustersecretstore.yaml
+resources:
+- resources.yaml
+results:
+- policy: require-requests-limits
+  isValidatingPolicy: true
+  kind: Pod
+  resources:
+  - good-pod
+  - pod-runs-as-root
+  result: pass
+- policy: require-requests-limits
+  isValidatingPolicy: true
+  kind: Pod
+  resources:
+  - pod-no-limits
+  result: fail
+- policy: require-non-root
+  isValidatingPolicy: true
+  kind: Pod
+  resources:
+  - good-pod
+  - pod-no-limits
+  result: pass
+- policy: require-non-root
+  isValidatingPolicy: true
+  kind: Pod
+  resources:
+  - pod-runs-as-root
+  result: fail
+- policy: disallow-latest-tag
+  isValidatingPolicy: true
+  kind: Pod
+  resources:
+  - good-pod
+  - pod-registry-port-tagged
+  - pod-digest
+  result: pass
+- policy: disallow-latest-tag
+  isValidatingPolicy: true
+  kind: Pod
+  resources:
+  - pod-latest-tag
+  - pod-untagged
+  - pod-registry-port-no-tag
+  result: fail
+- policy: restrict-clustersecretstore
+  isValidatingPolicy: true
+  kind: ExternalSecret
+  resources:
+  - es-namespaced-store
+  - es-default-kind
+  result: pass
+- policy: restrict-clustersecretstore
+  isValidatingPolicy: true
+  kind: ExternalSecret
+  resources:
+  - es-cluster-store
+  result: fail

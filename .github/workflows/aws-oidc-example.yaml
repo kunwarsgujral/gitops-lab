@@ -1,0 +1,27 @@
+# EXAMPLE ONLY (manual trigger). Shows keyless cloud auth from GitHub Actions via OIDC.
+# No AWS access keys are stored in GitHub: the job gets a short-lived OIDC token, and AWS STS
+# exchanges it for temporary credentials if the IAM role's trust policy allows this repo/branch.
+#
+# One-time AWS setup:
+#   1. IAM identity provider: https://token.actions.githubusercontent.com, audience sts.amazonaws.com
+#   2. IAM role whose trust policy restricts the "sub" claim, e.g.
+#        "token.actions.githubusercontent.com:sub": "repo:YOUR_GITHUB_USER/gitops-lab:ref:refs/heads/main"
+#   3. Put the role ARN in the workflow below.
+name: aws-oidc-example
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # lets the job request an OIDC token
+  contents: read
+
+jobs:
+  whoami:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-demo
+          aws-region: us-east-1
+      - run: aws sts get-caller-identity

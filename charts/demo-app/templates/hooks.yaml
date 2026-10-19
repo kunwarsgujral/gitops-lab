@@ -1,0 +1,124 @@
+{{- /*
+Argo CD hooks. These are plain Jobs; the annotations tell Argo CD WHEN to run them.
+Fixed names + BeforeHookCreation: the previous run's Job (succeeded or failed) stays around so you
+can `kubectl logs job/<name>`, and is replaced on the next sync.
+These annotations are ignored by plain `helm install`; with Helm alone you would use helm.sh/hook.
+The Jobs run in the app namespace, so they carry resources and a non-root security context to pass
+the Kyverno policies and fit the namespace quota, like any other workload.
+*/ -}}
+
+{{- if .Values.hooks.preSyncMigration.enabled }}
+---
+# PreSync: runs BEFORE manifests are applied. If it fails, the sync stops and the old version keeps running.
+# Must be idempotent and backward compatible (old pods serve traffic while the new ones roll out).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "demo-app.fullname" . }}-migrate
+  labels:
+    {{- include "demo-app.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.hooks.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ .Values.hooks.preSyncMigration.image }}
+          securityContext:
+            {{- toYaml .Values.hooks.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.hooks.resources | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "pretend DB migration running..."
+              sleep 5
+              echo "migration done"
+{{- end }}
+
+{{- if .Values.hooks.smokeTest.enabled }}
+---
+# PostSync: runs AFTER all resources are Healthy. A failure marks the sync as Failed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "demo-app.fullname" . }}-smoke-test
+  labels:
+    {{- include "demo-app.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.hooks.podSecurityContext | nindent 8 }}
+      containers:
+        - name: smoke
+          image: {{ .Values.hooks.smokeTest.image }}
+          securityContext:
+            {{- toYaml .Values.hooks.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.hooks.resources | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              URL="http://{{ include "demo-app.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}/healthz"
+              for i in $(seq 1 30); do
+                if wget -q -T 3 -O- "$URL"; then echo "smoke test passed"; exit 0; fi
+                echo "attempt $i failed, retrying"; sleep 2
+              done
+              echo "smoke test FAILED: $URL"; exit 1
+{{- end }}
+
+{{- if .Values.hooks.syncFailNotify.enabled }}
+---
+# SyncFail: runs only when a sync fails (including a failed PreSync/PostSync hook).
+# The webhook URL is optional and comes from the ESO-managed Secret, never from Git.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "demo-app.fullname" . }}-sync-fail-notify
+  labels:
+    {{- include "demo-app.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: SyncFail
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.hooks.podSecurityContext | nindent 8 }}
+      containers:
+        - name: notify
+          image: {{ .Values.hooks.syncFailNotify.image }}
+          securityContext:
+            {{- toYaml .Values.hooks.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.hooks.resources | nindent 12 }}
+          env:
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "demo-app.fullname" . }}-secrets
+                  key: SLACK_WEBHOOK_URL
+                  optional: true
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              MSG="Argo CD sync FAILED for {{ include "demo-app.fullname" . }} in namespace {{ .Release.Namespace }}"
+              echo "$MSG"
+              if [ -n "$SLACK_WEBHOOK_URL" ]; then
+                curl -sS -X POST -H 'Content-type: application/json' --data "{\"text\":\"$MSG\"}" "$SLACK_WEBHOOK_URL"
+              fi
+{{- end }}

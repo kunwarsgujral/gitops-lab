@@ -1,0 +1,36 @@
+# "inflate": a workload that exists only to request capacity, the classic way to test node autoscaling.
+# Each replica requests 1 CPU / 1Gi and does nothing (pause container).
+#
+# It may only run on the fake kwok node group:
+#  - the toleration accepts the `kwok-provider:NoSchedule` taint the provider puts on fake nodes
+#  - the nodeSelector keeps it off the real kind workers
+# Start at 0 replicas; README step 8 scales it up and down.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inflate
+  namespace: autoscale-test
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: inflate
+  template:
+    metadata:
+      labels:
+        app: inflate
+    spec:
+      nodeSelector:
+        kwok-nodegroup: small
+      tolerations:
+        - key: kwok-provider
+          operator: Exists
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi

@@ -1,0 +1,24 @@
+# App-of-apps root. Apply this ONCE by hand; Argo CD manages everything else from Git.
+# scripts/bootstrap.sh replaces YOUR_GITHUB_USER with your real repo owner.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USER/gitops-lab.git
+    targetRevision: main
+    path: apps
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

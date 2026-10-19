@@ -1,0 +1,30 @@
+# Cluster Autoscaler with the "kwok" cloud provider.
+#
+# A laptop can't create machines, so the autoscaler's kwok provider creates *fake* Node objects
+# instead, and the kwok controller makes them (and the pods scheduled onto them) look Ready/Running.
+# Everything the autoscaler decides (when to add a node, which group, when to remove one, what
+# blocks removal) is the real cluster-autoscaler logic, the same binary used on AWS/GCP/OpenShift.
+cloudProvider: kwok
+
+# Otherwise the Deployment is named "cluster-autoscaler-kwok-cluster-autoscaler".
+fullnameOverride: cluster-autoscaler
+
+# Gotcha: the chart silently renders NO Deployment unless autoDiscovery.clusterName (or
+# autoscalingGroups) is set. kwok doesn't use it, but it must be non-empty.
+autoDiscovery:
+  clusterName: kind-scaling
+
+# Same minor version as the cluster (kind node image is v1.36.4).
+image:
+  tag: v1.36.1
+
+extraArgs:
+  logtostderr: true
+  stderrthreshold: info
+  v: 4
+  # Shortened from the defaults (10m) so you can watch scale-down within a few minutes.
+  scale-down-unneeded-time: 1m
+  scale-down-delay-after-add: 1m
+  scale-down-utilization-threshold: 0.5 # the default: below 50% requested -> removal candidate
+  expander: least-waste # pick the node group that leaves the least idle CPU/memory
+  max-node-provision-time: 2m

@@ -40,7 +40,7 @@ class Handler(BaseHTTPRequestHandler):
                 code, body = 500, b"injected error\n"
             else:
                 has_key = "yes" if os.environ.get("API_KEY") else "no"
-                code, body = 200, f"hello (API_KEY injected: {has_key})\n".encode()
+                code, body = 200, f"hello v2 (API_KEY injected: {has_key})\n".encode()
             self._send(code, body)
             LATENCY.labels(path="/").observe(time.perf_counter() - start)
             REQUESTS.labels(path="/", code=str(code)).inc()
